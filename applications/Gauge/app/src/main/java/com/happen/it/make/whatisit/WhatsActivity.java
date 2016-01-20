@@ -32,6 +32,7 @@ import android.widget.TextView;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectInputStream;
@@ -66,6 +67,10 @@ public class WhatsActivity extends AppCompatActivity implements Runnable {
     private int noUidMask;
     private String[] componentNames;
 
+    // expreriment variables.
+    private long runId = 0;
+    private FileWriter energyVsTimeLog;
+    private long startTime = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -76,6 +81,20 @@ public class WhatsActivity extends AppCompatActivity implements Runnable {
         inputImageView = (ImageView)findViewById(R.id.tap_to_add_image);
         resultTextView = (TextView)findViewById(R.id.result_text);
         sharedPreferences = getSharedPreferences("Picture Pref", Context.MODE_PRIVATE);
+
+        // get experiment settings.
+        String appName = this.getApplicationName();
+        System.out.println("application name = " + appName);
+        this.runId = System.currentTimeMillis();
+        this.startTime = System.nanoTime();
+
+        File file = new File("/sdcard/" + runId + "_energy_time.txt");
+        file.delete();
+        try {
+            this.energyVsTimeLog = new FileWriter(file, false);
+        }catch(IOException e) {
+            e.printStackTrace();
+        }
 
         // create PowerTutor service.
         serviceIntent = new Intent(this, UMLoggerService.class);
@@ -310,7 +329,8 @@ public class WhatsActivity extends AppCompatActivity implements Runnable {
 
 
         try {
-            byte[] rawUidInfo = counterService.getUidInfo(Counter.WINDOW_TOTAL, noUidMask );
+            int ignoreMask = 1;
+            byte[] rawUidInfo = counterService.getUidInfo(Counter.WINDOW_TOTAL, noUidMask | ignoreMask);
             if (rawUidInfo != null) {
                 UidInfo[] uidInfos = (UidInfo[]) new ObjectInputStream(
                         new ByteArrayInputStream(rawUidInfo)).readObject();
@@ -318,12 +338,16 @@ public class WhatsActivity extends AppCompatActivity implements Runnable {
                 for (UidInfo uidInfo : uidInfos) {
                     if (uidInfo.uid == SystemInfo.AID_ALL) continue;
                     String name = this.getNameByUid(uidInfo.uid);
-                    System.out.println("[" + name + "] power usage");
-                    System.out.println("currentPower: " + uidInfo.currentPower);
-                    System.out.println("total energy: " + uidInfo.totalEnergy);
-                    System.out.println("average power: " + uidInfo.totalEnergy /
-                            (uidInfo.runtime == 0 ? 1 : uidInfo.runtime));
+                    if(name == this.getApplicationName()) { // only show the data for this app.
+                        System.out.println("[" + name + "] power usage");
+                        System.out.println("currentPower: " + uidInfo.currentPower);
+                        System.out.println("total energy: " + uidInfo.totalEnergy);
+                        System.out.println("average power: " + uidInfo.totalEnergy /
+                                (uidInfo.runtime == 0 ? 1 : uidInfo.runtime));
 
+                        this.energyVsTimeLog.write("time " + getCurrentRunTime() + " energy " + uidInfo.totalEnergy + "\n");
+                        this.energyVsTimeLog.flush();
+                    }
                 }
 
 
@@ -339,6 +363,11 @@ public class WhatsActivity extends AppCompatActivity implements Runnable {
         SystemInfo sysInfo = SystemInfo.getInstance();
         PackageManager pm = getApplicationContext().getPackageManager();
         return sysInfo.getUidName(uid, pm);
+    }
+
+    private String getApplicationName() {
+        int stringId = getApplicationContext().getApplicationInfo().labelRes;
+        return getApplicationContext().getString(stringId);
     }
 
     private class CounterServiceConnection implements ServiceConnection {
@@ -367,5 +396,13 @@ public class WhatsActivity extends AppCompatActivity implements Runnable {
         if(handler != null) {
             handler.postDelayed(this, 2 * PowerEstimator.ITERATION_INTERVAL);
         }
+    }
+
+    /* experiment utils. */
+
+    // return the current run time in ms.
+    public double getCurrentRunTime() {
+        long nanoTime = System.nanoTime();
+        return (double)(nanoTime - this.startTime) / 10e6;
     }
 }
