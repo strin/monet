@@ -1,31 +1,52 @@
 package com.happen.it.make.whatisit;
 
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.IBinder;
+import android.os.RemoteException;
+import android.preference.PreferenceManager;
 import android.provider.MediaStore;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.util.Log;
+import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ObjectInputStream;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.Date;
 
-public class WhatsActivity extends AppCompatActivity {
+import edu.umich.PowerTutor.service.ICounterService;
+import edu.umich.PowerTutor.service.PowerEstimator;
+import edu.umich.PowerTutor.service.UMLoggerService;
+import edu.umich.PowerTutor.service.UidInfo;
+import edu.umich.PowerTutor.util.Counter;
+import edu.umich.PowerTutor.util.SystemInfo;
+
+public class WhatsActivity extends AppCompatActivity implements Runnable {
 
     private TextView resultTextView;
     private ImageView inputImageView;
@@ -36,18 +57,56 @@ public class WhatsActivity extends AppCompatActivity {
     private String currentPhotoPath;
     private static final String PREF_USE_CAMERA_KEY = "USE_CAMERA";
 
+    // energy profiler service.
+    private static final String TAG = "PowerProfiler";
+    private ICounterService counterService;
+    private Intent serviceIntent;
+    private Handler handler;
+    private CounterServiceConnection conn;
+    private int noUidMask;
+    private String[] componentNames;
+
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-
-
 
         setContentView(R.layout.activity_whats);
         identifyButton = (Button)findViewById(R.id.identify_button);
         inputImageView = (ImageView)findViewById(R.id.tap_to_add_image);
         resultTextView = (TextView)findViewById(R.id.result_text);
         sharedPreferences = getSharedPreferences("Picture Pref", Context.MODE_PRIVATE);
+
+        // create PowerTutor service.
+        serviceIntent = new Intent(this, UMLoggerService.class);
+        conn = new CounterServiceConnection();
+
+        if(conn == null) {
+            System.err.println("connection to Profiler service failed to be established.");
+        } else {
+            startService(serviceIntent);
+            System.out.println("service started");
+        }
+
+        if(savedInstanceState != null) {
+            componentNames = savedInstanceState.getStringArray("componentNames");
+            noUidMask = savedInstanceState.getInt("noUidMask");
+        }
+
+        getApplicationContext().bindService(serviceIntent, conn, BIND_AUTO_CREATE);
+
+        // run test code.
+        Thread thread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                MxNetGauge mxNetGauge = new MxNetGauge(getApplicationContext(), 10);
+                mxNetGauge.runTest();
+                System.out.println(mxNetGauge.toString());
+            }
+        });
+
+        thread.start();
+
 
         identifyButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -84,11 +143,14 @@ public class WhatsActivity extends AppCompatActivity {
                         System.out.println("total time used = " + timeElapsed);
                         System.out.println("throughput = " + numRuns / (float)timeElapsed);
                         System.out.println("numRuns = " + numRuns);
-                        resultTextView.setText(tag + "/" + timeElapsed + "/" + numRuns / (float)timeElapsed + "/" + numRuns);
+                        resultTextView.setText(tag + "/" + timeElapsed + "/" + numRuns / (float) timeElapsed + "/" + numRuns);
                     }
                 }.execute(processedBitmap);
             }
+
+
         });
+
         inputImageView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -105,6 +167,10 @@ public class WhatsActivity extends AppCompatActivity {
                 }
             }
         });
+
+        handler = new Handler();
+        handler.postDelayed(this, 100);
+        refreshView();
     }
 
     private void dispatchTakePictureIntent() {
@@ -226,5 +292,80 @@ public class WhatsActivity extends AppCompatActivity {
         int y = (height - DESIRED_SIDE) / 2;
         int x = (width - DESIRED_SIDE) / 2;
         return Bitmap.createBitmap(scaled, x, y, DESIRED_SIDE, DESIRED_SIDE);
+    }
+
+
+    // energy gauge.
+    private void refreshView() {
+        System.out.println("refreshing view");
+        if (counterService == null) {
+            TextView loadingText = new TextView(this);
+            loadingText.setText("Waiting for profiler service...");
+            loadingText.setGravity(Gravity.CENTER);
+            setContentView(loadingText);
+            return;
+        }else{
+            setContentView(R.layout.activity_whats);
+        }
+
+
+        try {
+            byte[] rawUidInfo = counterService.getUidInfo(Counter.WINDOW_TOTAL, noUidMask );
+            if (rawUidInfo != null) {
+                UidInfo[] uidInfos = (UidInfo[]) new ObjectInputStream(
+                        new ByteArrayInputStream(rawUidInfo)).readObject();
+                double total = 0;
+                for (UidInfo uidInfo : uidInfos) {
+                    if (uidInfo.uid == SystemInfo.AID_ALL) continue;
+                    String name = this.getNameByUid(uidInfo.uid);
+                    System.out.println("[" + name + "] power usage");
+                    System.out.println("currentPower: " + uidInfo.currentPower);
+                    System.out.println("total energy: " + uidInfo.totalEnergy);
+                    System.out.println("average power: " + uidInfo.totalEnergy /
+                            (uidInfo.runtime == 0 ? 1 : uidInfo.runtime));
+
+                }
+
+
+            }
+        } catch (IOException e) {
+        } catch (RemoteException e) {
+        } catch (ClassNotFoundException e) {
+        } catch (ClassCastException e) {
+        }
+    }
+
+    private String getNameByUid(int uid) {
+        SystemInfo sysInfo = SystemInfo.getInstance();
+        PackageManager pm = getApplicationContext().getPackageManager();
+        return sysInfo.getUidName(uid, pm);
+    }
+
+    private class CounterServiceConnection implements ServiceConnection {
+        public void onServiceConnected(ComponentName className,
+                                       IBinder boundService ) {
+            System.out.println("service connected");
+            counterService = ICounterService.Stub.asInterface((IBinder)boundService);
+            try {
+                componentNames = counterService.getComponents();
+                noUidMask = counterService.getNoUidMask();
+            } catch(RemoteException e) {
+                counterService = null;
+            }
+        }
+
+        public void onServiceDisconnected(ComponentName className) {
+            counterService = null;
+            getApplicationContext().unbindService(conn);
+            getApplicationContext().bindService(serviceIntent, conn, 0);
+            Log.w(TAG, "Unexpectedly lost connection to service");
+        }
+    }
+
+    public void run() {
+        refreshView();
+        if(handler != null) {
+            handler.postDelayed(this, 2 * PowerEstimator.ITERATION_INTERVAL);
+        }
     }
 }
