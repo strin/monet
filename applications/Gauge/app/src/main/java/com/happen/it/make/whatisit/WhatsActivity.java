@@ -16,6 +16,7 @@ import android.os.IBinder;
 import android.os.RemoteException;
 import android.preference.PreferenceManager;
 import android.provider.MediaStore;
+import android.support.v4.util.Pair;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -37,6 +38,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 
@@ -71,6 +73,7 @@ public class WhatsActivity extends AppCompatActivity implements Runnable {
     private long runId = 0;
     private FileWriter energyVsTimeLog;
     private long startTime = 0;
+    private ArrayList<Pair<Double, Double>> timeVsEnergy;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -87,6 +90,9 @@ public class WhatsActivity extends AppCompatActivity implements Runnable {
         System.out.println("application name = " + appName);
         this.runId = System.currentTimeMillis();
         this.startTime = System.nanoTime();
+
+        this.timeVsEnergy = new ArrayList<>();
+        this.timeVsEnergy.add(new Pair(new Double(getCurrentRunTime()), new Double(0)));
 
         File file = new File("/sdcard/" + runId + "_energy_time.txt");
         file.delete();
@@ -120,10 +126,12 @@ public class WhatsActivity extends AppCompatActivity implements Runnable {
             public void run() {
                 MxNetGauge mxNetGauge = new MxNetGauge(getApplicationContext(), 10);
                 mxNetGauge.runTest();
+                System.out.println("total energy = " +
+                        getTotalEnergy(mxNetGauge.testStartTime, mxNetGauge.testEndTime));
                 System.out.println(mxNetGauge.toString());
             }
         });
-
+        
         thread.start();
 
 
@@ -345,7 +353,9 @@ public class WhatsActivity extends AppCompatActivity implements Runnable {
                         System.out.println("average power: " + uidInfo.totalEnergy /
                                 (uidInfo.runtime == 0 ? 1 : uidInfo.runtime));
 
-                        this.energyVsTimeLog.write("time " + getCurrentRunTime() + " energy " + uidInfo.totalEnergy + "\n");
+                        double currTime = getCurrentRunTime();
+                        this.timeVsEnergy.add(new Pair(new Double(currTime), new Double(uidInfo.totalEnergy)));
+                        this.energyVsTimeLog.write("time " + currTime + " energy " + uidInfo.totalEnergy + "\n");
                         this.energyVsTimeLog.flush();
                     }
                 }
@@ -404,5 +414,44 @@ public class WhatsActivity extends AppCompatActivity implements Runnable {
     public double getCurrentRunTime() {
         long nanoTime = System.nanoTime();
         return (double)(nanoTime - this.startTime) / 10e6;
+    }
+
+    public double getTotalEnergy(long startTimeNano, long endTimeNano) {
+        double startTime = (startTimeNano - this.startTime) / 10e6;
+        double endTime = (endTimeNano - this.startTime) / 10e6;
+
+        int i;
+        double startEnergy, endEnergy;
+        for(i = 0; i < this.timeVsEnergy.size(); i++) {
+            if(this.timeVsEnergy.get(i).first < startTime) continue;
+            else break;
+        }
+
+        if(i == 0) startEnergy = 0;
+        else if(i == this.timeVsEnergy.size())
+            startEnergy = this.timeVsEnergy.get(this.timeVsEnergy.size()-1).second;
+        else{
+            startEnergy = this.timeVsEnergy.get(i-1).second
+                    + (this.timeVsEnergy.get(i).second - this.timeVsEnergy.get(i-1).second)
+                    * (startTime - this.timeVsEnergy.get(i-1).first)
+                    / (this.timeVsEnergy.get(i).first - this.timeVsEnergy.get(i-1).first);
+        }
+
+        for(i = 0; i < this.timeVsEnergy.size(); i++) {
+            if(this.timeVsEnergy.get(i).first < endTime) continue;
+            else break;
+        }
+
+        if(i == 0) endEnergy = 0;
+        else if(i == this.timeVsEnergy.size())
+            endEnergy = this.timeVsEnergy.get(this.timeVsEnergy.size()-1).second;
+        else{
+            endEnergy = this.timeVsEnergy.get(i-1).second
+                    + (this.timeVsEnergy.get(i).second - this.timeVsEnergy.get(i-1).second)
+                    * (endTime - this.timeVsEnergy.get(i-1).first)
+                    / (this.timeVsEnergy.get(i).first - this.timeVsEnergy.get(i-1).first);
+        }
+
+        return endEnergy - startEnergy;
     }
 }

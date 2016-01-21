@@ -62,6 +62,9 @@ public class MxNetGauge extends Application {
 
     public double statsForwardPass = 0;
 
+    // the time the task is started, and ended in nano seconds.
+    public long testStartTime, testEndTime;
+
     BatteryManager mBatteryManager;
 
     public MxNetGauge(Context context, int num_iter) {
@@ -101,9 +104,7 @@ public class MxNetGauge extends Application {
 
         Predictor predictor = this.getPredictor();
         System.out.println("welcome");
-        long startTime = System.nanoTime();
-
-
+        testStartTime = System.nanoTime();
 
         long percentage = 0;
         for(int it = 0; it < this.num_iter; it++) {
@@ -116,9 +117,10 @@ public class MxNetGauge extends Application {
             }
             final float[] result = predictor.getOutput(0);
         }
-        long endTime = System.nanoTime();
 
-        this.statsForwardPass = (double)(endTime - startTime) / 10e6 / (double)this.num_iter / (double)bitmaps.length;
+        testEndTime = System.nanoTime();
+
+        this.statsForwardPass = (testEndTime - testStartTime) / 10e6 / (double)this.num_iter / (double)bitmaps.length;
     }
 
     public String toString() {
