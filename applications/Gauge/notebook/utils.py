@@ -34,10 +34,10 @@ def get_runs():
     run_ids = set(re.findall('.*/([0-9]*)\.txt[\r]?\n', out))
     return list(run_ids)
 
-def get_time_energy(run_id):
-    out = run_cmd('adb -s %s shell cat /sdcard/%s_energy_time.txt' % (device_id, run_id))
+def get_vs(run_id, experiment_id):
+    out = run_cmd('adb -s %s shell cat /sdcard/%s_%s.txt' % (device_id, run_id, experiment_id))
     vs = parse_table(out)
-    return (vs['time'], vs['energy'])
+    return vs
 
 def plot_xy(x, y):
     trace = go.Scatter(

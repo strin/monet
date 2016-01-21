@@ -48,6 +48,8 @@ import edu.umich.PowerTutor.service.UMLoggerService;
 import edu.umich.PowerTutor.service.UidInfo;
 import edu.umich.PowerTutor.util.Counter;
 import edu.umich.PowerTutor.util.SystemInfo;
+import monet.experiment.DatasetSize;
+import monet.experiment.Experiment;
 
 public class WhatsActivity extends AppCompatActivity implements Runnable {
 
@@ -70,7 +72,7 @@ public class WhatsActivity extends AppCompatActivity implements Runnable {
     private String[] componentNames;
 
     // expreriment variables.
-    private long runId = 0;
+    public long runId = 0;
     private FileWriter energyVsTimeLog;
     private long startTime = 0;
     private ArrayList<Pair<Double, Double>> timeVsEnergy;
@@ -87,8 +89,8 @@ public class WhatsActivity extends AppCompatActivity implements Runnable {
 
         // get experiment settings.
         String appName = this.getApplicationName();
-        System.out.println("application name = " + appName);
         this.runId = System.currentTimeMillis();
+        System.out.println("runId = " + runId);
         this.startTime = System.nanoTime();
 
         this.timeVsEnergy = new ArrayList<>();
@@ -121,19 +123,17 @@ public class WhatsActivity extends AppCompatActivity implements Runnable {
         getApplicationContext().bindService(serviceIntent, conn, BIND_AUTO_CREATE);
 
         // run test code.
+        // experiments can be
+        // 1. DatasetSize. effect of dataset size on energy and performance.
         Thread thread = new Thread(new Runnable() {
             @Override
             public void run() {
-                MxNetGauge mxNetGauge = new MxNetGauge(getApplicationContext(), 10);
-                mxNetGauge.runTest();
-                System.out.println("total energy = " +
-                        getTotalEnergy(mxNetGauge.testStartTime, mxNetGauge.testEndTime));
-                System.out.println(mxNetGauge.toString());
+                Experiment experiment = new DatasetSize(WhatsActivity.this);
+                experiment.run();
             }
         });
-        
-        thread.start();
 
+        thread.start();
 
         identifyButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -324,7 +324,6 @@ public class WhatsActivity extends AppCompatActivity implements Runnable {
 
     // energy gauge.
     private void refreshView() {
-        System.out.println("refreshing view");
         if (counterService == null) {
             TextView loadingText = new TextView(this);
             loadingText.setText("Waiting for profiler service...");
@@ -347,11 +346,11 @@ public class WhatsActivity extends AppCompatActivity implements Runnable {
                     if (uidInfo.uid == SystemInfo.AID_ALL) continue;
                     String name = this.getNameByUid(uidInfo.uid);
                     if(name == this.getApplicationName()) { // only show the data for this app.
-                        System.out.println("[" + name + "] power usage");
-                        System.out.println("currentPower: " + uidInfo.currentPower);
-                        System.out.println("total energy: " + uidInfo.totalEnergy);
-                        System.out.println("average power: " + uidInfo.totalEnergy /
-                                (uidInfo.runtime == 0 ? 1 : uidInfo.runtime));
+//                        System.out.println("[" + name + "] power usage");
+//                        System.out.println("currentPower: " + uidInfo.currentPower);
+//                        System.out.println("total energy: " + uidInfo.totalEnergy);
+//                        System.out.println("average power: " + uidInfo.totalEnergy /
+//                                (uidInfo.runtime == 0 ? 1 : uidInfo.runtime));
 
                         double currTime = getCurrentRunTime();
                         this.timeVsEnergy.add(new Pair(new Double(currTime), new Double(uidInfo.totalEnergy)));

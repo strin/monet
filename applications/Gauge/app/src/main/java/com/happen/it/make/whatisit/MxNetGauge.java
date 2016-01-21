@@ -30,6 +30,8 @@ import android.os.BatteryManager;
 import android.content.Context;
 import android.util.Log;
 
+import edu.umich.PowerTutor.util.SystemInfo;
+
 /**
  * Created by Tianlins on Jan 17. 2015.
  */
@@ -65,6 +67,15 @@ public class MxNetGauge extends Application {
     // the time the task is started, and ended in nano seconds.
     public long testStartTime, testEndTime;
 
+    public final String[] filenames = new String[] {
+            "cat.jpg",
+            "keyboard.jpg",
+            "night.jpg",
+            "red-car.jpg",
+            "sea.jpg",
+            "sky.jpg"
+    };
+
     BatteryManager mBatteryManager;
 
     public MxNetGauge(Context context, int num_iter) {
@@ -76,14 +87,7 @@ public class MxNetGauge extends Application {
 
     public void runTest() {
         AssetManager assetManager = this.context.getAssets();
-        final String[] filenames = new String[] {
-                "cat.jpg",
-                "keyboard.jpg",
-                "night.jpg",
-                "red-car.jpg",
-                "sea.jpg",
-                "sky.jpg"
-        };
+
 
         final Bitmap[] bitmaps = new Bitmap[filenames.length];
         final BitmapContainer[] containers = new BitmapContainer[filenames.length];
@@ -103,7 +107,6 @@ public class MxNetGauge extends Application {
         }
 
         Predictor predictor = this.getPredictor();
-        System.out.println("welcome");
         testStartTime = System.nanoTime();
 
         long percentage = 0;
@@ -140,6 +143,10 @@ public class MxNetGauge extends Application {
             return "Shit";
         }
         return dict.get(i);
+    }
+
+    public int getDatasetSize() {
+        return filenames.length;
     }
 
     public Map<String, Float> getMean() {
