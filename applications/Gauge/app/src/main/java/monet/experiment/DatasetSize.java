@@ -22,26 +22,32 @@ public class DatasetSize implements Experiment {
 
     private FileWriter log;
 
-    public DatasetSize(WhatsActivity activity) {
+    private MxNetGauge mxNetGauge;
+
+    public DatasetSize(WhatsActivity activity, String modelName) {
         this.activity = activity;
         this.energy = new double[repeats.length];
         this.time = new double[repeats.length];
 
-        File file = new File("/sdcard/" + activity.runId + "_" + EXPERIMENT_ID + ".txt");
+
+        File file = new File("/sdcard/" + activity.runId + "_" + EXPERIMENT_ID + "_" + modelName + ".txt");
         file.delete();
         try {
             this.log = new FileWriter(file, false);
         }catch(IOException e) {
             e.printStackTrace();
         }
+
+        System.out.println("[model] loading...");
+        mxNetGauge = new MxNetGauge(activity.getApplicationContext(), modelName);
+        System.out.println("[model] loading complete.");
     }
 
     public void run() {
         for(int ri = 0; ri < repeats.length; ri++) {
             System.out.println("run #" + ri);
             int numRepeat = this.repeats[ri];
-            MxNetGauge mxNetGauge = new MxNetGauge(activity.getApplicationContext(), numRepeat);
-            mxNetGauge.runTest();
+            mxNetGauge.runTest(numRepeat);
             this.energy[ri] = activity.getTotalEnergy(mxNetGauge.testStartTime, mxNetGauge.testEndTime);
             this.time[ri] = (mxNetGauge.testEndTime - mxNetGauge.testStartTime) / 10e6;
             System.out.println("total energy = " + energy[ri]);
@@ -56,5 +62,9 @@ public class DatasetSize implements Experiment {
             }
         }
         System.out.println("experiment ended");
+    }
+
+    public MxNetGauge getGauge() {
+        return this.mxNetGauge;
     }
 }

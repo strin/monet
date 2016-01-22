@@ -76,6 +76,7 @@ public class WhatsActivity extends AppCompatActivity implements Runnable {
     private FileWriter energyVsTimeLog;
     private long startTime = 0;
     private ArrayList<Pair<Double, Double>> timeVsEnergy;
+    private Experiment experiment;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -125,15 +126,18 @@ public class WhatsActivity extends AppCompatActivity implements Runnable {
         // run test code.
         // experiments can be
         // 1. DatasetSize. effect of dataset size on energy and performance.
+        experiment = new DatasetSize(WhatsActivity.this, "inception-bn");
         Thread thread = new Thread(new Runnable() {
             @Override
             public void run() {
-                Experiment experiment = new DatasetSize(WhatsActivity.this);
                 experiment.run();
             }
         });
 
+        // use this to start experiment.
         thread.start();
+        handler = new Handler();
+        handler.postDelayed(this, 100);
 
         identifyButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -157,11 +161,7 @@ public class WhatsActivity extends AppCompatActivity implements Runnable {
                     @Override
                     protected String doInBackground(Bitmap... bitmaps) {
                         synchronized (identifyButton) {
-                            long numRuns = 10;
-                            long startTime = System.currentTimeMillis();
-                            String tag = MxNetUtils.identifyImage(bitmaps[0]);
-                            long endTime = System.currentTimeMillis();
-                            timeElapsed = (double)(endTime - startTime) / 1e3;
+                            String tag = MxNetUtils.identifyImage(experiment.getGauge(), bitmaps[0]);
                             return tag;
                         }
                     }
@@ -195,9 +195,7 @@ public class WhatsActivity extends AppCompatActivity implements Runnable {
             }
         });
 
-        handler = new Handler();
-        handler.postDelayed(this, 100);
-        refreshView();
+
     }
 
     private void dispatchTakePictureIntent() {
@@ -323,15 +321,18 @@ public class WhatsActivity extends AppCompatActivity implements Runnable {
 
 
     // energy gauge.
+    public TextView loadingText = null;
     private void refreshView() {
+//        System.out.println("refreshing energy profiles.");
         if (counterService == null) {
-            TextView loadingText = new TextView(this);
+            loadingText = new TextView(this);
             loadingText.setText("Waiting for profiler service...");
             loadingText.setGravity(Gravity.CENTER);
             setContentView(loadingText);
             return;
-        }else{
+        }else if(loadingText != null) {
             setContentView(R.layout.activity_whats);
+            loadingText = null;
         }
 
 
