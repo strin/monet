@@ -6,7 +6,7 @@ import re
 device_id = '03157df3929b6037'
 
 def run_cmd(cmd):
-    p = subprocess.Popen(cmd.split(' '), 
+    p = subprocess.Popen(cmd.split(' '),
             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out, err = p.communicate()
     return out
@@ -39,15 +39,51 @@ def get_vs(run_id, experiment_id):
     vs = parse_table(out)
     return vs
 
-def plot_xy(x, y):
-    trace = go.Scatter(
-        x = x,
-        y = y,
+def plot_xy(x, y, names=None, xlabel='x', ylabel='y', title=''):
+
+    layout = go.Layout(
+        title=title,
+        xaxis=dict(
+            title=xlabel,
+            titlefont=dict(
+                family='Courier New, monospace',
+                size=18,
+                color='#7f7f7f'
+            )
+        ),
+        yaxis=dict(
+            title=ylabel,
+            titlefont=dict(
+                family='Courier New, monospace',
+                size=18,
+                color='#7f7f7f'
+            )
+        )
     )
+    
+    if type(x) == list:
+        xs = x
+        ys = y
+        if not names:
+            names = ['line-' + i for i in range(len(xs))]
+    else:
+        xs = [x]
+        ys = [y]
+        names = ['line']
+    
+    traces = []
 
-    data = [trace]
+    for (x, y, name) in zip(xs, ys, names):
+        trace = go.Scatter(
+            x = x,
+            y = y,
+            name = name
+        )
+        traces.append(trace)
 
-    disp = py.iplot(data, filename='basic-line')
+    data = traces
+    fig = go.Figure(data=data, layout=layout)
+    disp = py.iplot(fig, filename='basic-line')
     return disp.data
 
 

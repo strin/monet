@@ -50,6 +50,7 @@ import edu.umich.PowerTutor.util.Counter;
 import edu.umich.PowerTutor.util.SystemInfo;
 import monet.experiment.DatasetSize;
 import monet.experiment.Experiment;
+import monet.experiment.ProcessLevel;
 
 public class WhatsActivity extends AppCompatActivity implements Runnable {
 
@@ -77,6 +78,7 @@ public class WhatsActivity extends AppCompatActivity implements Runnable {
     private long startTime = 0;
     private ArrayList<Pair<Double, Double>> timeVsEnergy;
     private Experiment experiment;
+    private boolean experimentEnded;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -126,18 +128,23 @@ public class WhatsActivity extends AppCompatActivity implements Runnable {
         // run test code.
         // experiments can be
         // 1. DatasetSize. effect of dataset size on energy and performance.
-        experiment = new DatasetSize(WhatsActivity.this, "inception-bn");
+//        experiment = new DatasetSize(WhatsActivity.this, "inception-bn");
+        experiment = new ProcessLevel(WhatsActivity.this, "default");
+        experimentEnded = false;
         Thread thread = new Thread(new Runnable() {
             @Override
             public void run() {
                 experiment.run();
+                experimentEnded = true;
+                resultTextView = (TextView)findViewById(R.id.result_text);
+                resultTextView.setText("experiment done.");
             }
         });
 
         // use this to start experiment.
         thread.start();
         handler = new Handler();
-        handler.postDelayed(this, 100);
+        handler.postDelayed(this, 10);
 
         identifyButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -403,7 +410,7 @@ public class WhatsActivity extends AppCompatActivity implements Runnable {
 
     public void run() {
         refreshView();
-        if(handler != null) {
+        if(handler != null && experimentEnded == false) {
             handler.postDelayed(this, 2 * PowerEstimator.ITERATION_INTERVAL);
         }
     }
